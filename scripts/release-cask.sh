@@ -35,7 +35,7 @@ DIST_DIR="$ROOT_DIR/dist"
 ZIP_NAME="${PRODUCT_NAME}-${VERSION}.zip"
 ZIP_PATH="$DIST_DIR/$ZIP_NAME"
 APP_PATH="$EXPORT_DIR/$PRODUCT_NAME.app"
-RELEASE_URL="https://github.com/Loriage/BeszelBar/releases/download/v${VERSION}/${ZIP_NAME}"
+RELEASE_URL="https://github.com/nichtlegacy/BeszelBar/releases/download/v${VERSION}/${ZIP_NAME}"
 CASK_PATH="$DIST_DIR/beszelbar.rb"
 UNSIGNED_ZIP_PATH="$BUILD_ROOT/${PRODUCT_NAME}-${VERSION}-unsigned.zip"
 
@@ -142,7 +142,7 @@ cask "beszelbar" do
   url "${RELEASE_URL}"
   name "BeszelBar"
   desc "Monitor Beszel hubs from the macOS menu bar"
-  homepage "https://github.com/Loriage/BeszelBar"
+  homepage "https://github.com/nichtlegacy/BeszelBar"
 
   depends_on macos: ">= :sonoma"
 

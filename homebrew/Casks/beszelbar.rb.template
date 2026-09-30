@@ -2,10 +2,10 @@ cask "beszelbar" do
   version "__VERSION__"
   sha256 "__SHA256__"
 
-  url "https://github.com/Loriage/BeszelBar/releases/download/v#{version}/BeszelBar-#{version}.zip"
+  url "https://github.com/nichtlegacy/BeszelBar/releases/download/v#{version}/BeszelBar-#{version}.zip"
   name "BeszelBar"
   desc "Monitor Beszel hubs from the macOS menu bar"
-  homepage "https://github.com/Loriage/BeszelBar"
+  homepage "https://github.com/nichtlegacy/BeszelBar"
 
   depends_on macos: :sonoma
 

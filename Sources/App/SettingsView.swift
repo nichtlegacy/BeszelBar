@@ -808,7 +808,7 @@ struct AboutView: View {
                     }
                 }
 
-                if let githubURL = URL(string: "https://github.com/Loriage/BeszelBar") {
+                if let githubURL = URL(string: "https://github.com/nichtlegacy/BeszelBar") {
                     Link(destination: githubURL) {
                         Label("GitHub", systemImage: "chevron.left.forwardslash.chevron.right")
                     }
