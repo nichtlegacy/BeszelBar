@@ -818,7 +818,7 @@ struct AboutView: View {
 
             Spacer()
 
-            Text("© 2026 nichtlegacy. MIT License. Based on BeszelBar by Bruno DURAND.")
+            Text("© 2026 nichtlegacy. MIT License. Based on BeszelBar by Loriage.")
                 .font(.caption2)
                 .foregroundColor(.secondary)
                 .padding(.bottom, 16)

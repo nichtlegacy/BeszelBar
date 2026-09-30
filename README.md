@@ -46,11 +46,9 @@ The project stays deliberately:
 
 ## Requirements
 
-| | |
-|---|---|
-| macOS | 14 Sonoma or later |
-| Beszel | A running hub with a user account; agents 0.19+ recommended for full GPU/disk data |
-| Build | Xcode 16+ and [xcodegen](https://github.com/yonaskolb/XcodeGen), only when building from source |
+- **macOS** — 14 Sonoma or later
+- **Beszel** — a running hub with a user account; agents 0.19+ recommended for full GPU/disk data
+- **Build** — Xcode 16+ and [xcodegen](https://github.com/yonaskolb/XcodeGen), only when building from source
 
 ## Install
 
@@ -149,13 +147,13 @@ open BeszelBar.xcodeproj  # or: xcodebuild -scheme BeszelBar build
 
 ## Credits
 
-BeszelBar was started by **Bruno DURAND** as [brunooctet/BeszelBar](https://github.com/brunooctet/BeszelBar) and continued via [Loriage/BeszelBar](https://github.com/Loriage/BeszelBar). This fork carries the project forward with GPU monitoring, multi-disk display with aliases and grouping, configurable thresholds and a reworked settings UI.
+BeszelBar was created by **[Loriage](https://github.com/Loriage)** ([Loriage/BeszelBar](https://github.com/Loriage/BeszelBar)). This fork carries the project forward with GPU monitoring, multi-disk display with aliases and grouping, configurable thresholds and a reworked settings UI.
 
 - **[henrygd/beszel](https://github.com/henrygd/beszel)** — the monitoring server BeszelBar reads from. None of this exists without it.
 
 ## License
 
-[MIT](LICENSE) — © 2025 Bruno DURAND, © 2026 nichtlegacy. Do what you like with it.
+[MIT](LICENSE) — © 2026 Loriage, © 2026 nichtlegacy. Do what you like with it.
 
 ## Disclaimer
 
