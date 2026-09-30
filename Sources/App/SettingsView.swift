@@ -23,6 +23,8 @@ struct SettingsView: View {
                 switch selectedTab {
                 case .general:
                     GeneralView()
+                case .disks:
+                    DisksView()
                 case .hubs:
                     HubsView(appState: appState)
                 case .about:
@@ -31,7 +33,7 @@ struct SettingsView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .frame(width: 500, height: 420)
+        .frame(width: 520, height: 480)
     }
 }
 
@@ -82,22 +84,29 @@ struct TabButton: View {
                 .frame(width: 44, height: 44)
 
                 Text(tab.title)
-                    .font(.system(size: 11))
-                    .foregroundColor(isSelected ? .accentColor : .secondary)
+                    .font(.system(size: 11, weight: isSelected ? .semibold : .regular))
+                    .foregroundColor(isSelected ? .primary : .secondary)
+
+                RoundedRectangle(cornerRadius: 1)
+                    .fill(isSelected ? Color.accentColor : Color.clear)
+                    .frame(width: 28, height: 2)
             }
         }
         .buttonStyle(.plain)
+        .focusEffectDisabled()
     }
 }
 
 enum SettingsTab: CaseIterable {
     case general
+    case disks
     case hubs
     case about
 
     var title: String {
         switch self {
         case .general: return "General"
+        case .disks: return "Disks"
         case .hubs: return "Hubs"
         case .about: return "About"
         }
@@ -106,6 +115,7 @@ enum SettingsTab: CaseIterable {
     var icon: String {
         switch self {
         case .general: return "gear"
+        case .disks: return "internaldrive"
         case .hubs: return "server.rack"
         case .about: return "info.circle"
         }
@@ -448,6 +458,12 @@ struct EditHubSheet: View {
 struct GeneralView: View {
     @AppStorage("refreshInterval") private var refreshInterval = 30
     @AppStorage("launchAtLogin") private var launchAtLogin = false
+    @AppStorage("showStatsInMenu") private var showStatsInMenu = true
+    @AppStorage("maxSystemsInMenu") private var maxSystemsInMenu = 15
+    @AppStorage("usageWarnPercent") private var usageWarnPercent = 70.0
+    @AppStorage("usageCriticalPercent") private var usageCriticalPercent = 90.0
+    @AppStorage("tempWarnC") private var tempWarnC = 60.0
+    @AppStorage("tempCriticalC") private var tempCriticalC = 80.0
 
     var body: some View {
         ScrollView {
@@ -460,6 +476,30 @@ struct GeneralView: View {
                             setLaunchAtLogin(newValue)
                         }
                     Text("Automatically open BeszelBar when you start your Mac.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 12)
+
+                Divider()
+                    .padding(.horizontal, 20)
+
+                SectionHeader(title: "MENU")
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Toggle("Show stats in menu", isOn: $showStatsInMenu)
+                    Text("Display CPU, memory, GPU and disk badges next to each system.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+
+                    HStack {
+                        Text("Systems shown")
+                        Spacer()
+                        Stepper("\(maxSystemsInMenu)", value: $maxSystemsInMenu, in: 5...50)
+                            .frame(width: 130)
+                    }
+                    Text("Additional systems are hidden behind a summary row.")
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
@@ -491,6 +531,43 @@ struct GeneralView: View {
                 }
                 .padding(.horizontal, 20)
                 .padding(.vertical, 12)
+
+                Divider()
+                    .padding(.horizontal, 20)
+
+                SectionHeader(title: "THRESHOLDS")
+
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Text("Usage warning")
+                        Spacer()
+                        Stepper("\(Int(usageWarnPercent))%", value: $usageWarnPercent, in: 40...85, step: 5)
+                            .frame(width: 130)
+                    }
+                    HStack {
+                        Text("Usage critical")
+                        Spacer()
+                        Stepper("\(Int(usageCriticalPercent))%", value: $usageCriticalPercent, in: 60...100, step: 5)
+                            .frame(width: 130)
+                    }
+                    HStack {
+                        Text("Temperature warning")
+                        Spacer()
+                        Stepper("\(Int(tempWarnC))°C", value: $tempWarnC, in: 40...85, step: 5)
+                            .frame(width: 130)
+                    }
+                    HStack {
+                        Text("Temperature critical")
+                        Spacer()
+                        Stepper("\(Int(tempCriticalC))°C", value: $tempCriticalC, in: 60...100, step: 5)
+                            .frame(width: 130)
+                    }
+                    Text("Progress bars turn orange at the warning level and red at the critical level.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 12)
             }
         }
         .safeAreaInset(edge: .bottom) {
@@ -516,6 +593,164 @@ struct GeneralView: View {
         } catch {
             print("Failed to set launch at login: \(error)")
         }
+    }
+}
+
+/// GPU and disk display settings.
+struct DisksView: View {
+    @AppStorage("gpuBarMetric") private var gpuBarMetric = "utilization"
+    @ObservedObject private var aliasStore = DiskAliasStore.shared
+    private var appState = AppState.shared
+    @State private var selectedSystemID: String = ""
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                SectionHeader(title: "GPU")
+
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Text("Progress bar shows")
+                        Spacer()
+                        Picker("", selection: $gpuBarMetric) {
+                            Text("Utilization").tag("utilization")
+                            Text("VRAM usage").tag("vram")
+                        }
+                        .labelsHidden()
+                        .frame(width: 130)
+                    }
+                    Text("Which metric the GPU progress bars represent in the system details.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 12)
+
+                Divider()
+                    .padding(.horizontal, 20)
+
+                SectionHeader(title: "DISK NAMES")
+
+                DiskAliasEditor(
+                    aliasStore: aliasStore,
+                    appState: appState,
+                    selectedSystemID: $selectedSystemID
+                )
+                .padding(.horizontal, 20)
+                .padding(.vertical, 12)
+            }
+        }
+    }
+}
+
+/// Rename or hide individual disks per system (the hub only reports device names).
+struct DiskAliasEditor: View {
+    @ObservedObject var aliasStore: DiskAliasStore
+    let appState: AppState
+    @Binding var selectedSystemID: String
+
+    private var systems: [SystemRecord] {
+        appState.selectedInstanceSystems
+    }
+
+    private var selectedSystem: SystemRecord? {
+        systems.first(where: { $0.id == selectedSystemID }) ?? systems.first
+    }
+
+    /// Raw disk keys plus stored (e.g. hidden) keys, so hidden disks can be restored.
+    private var diskKeys: [(id: String, defaultName: String)] {
+        guard let system = selectedSystem else { return [] }
+        var keys = appState.rawDiskEntries(for: system.id)
+        let stored = aliasStore.storedDiskIDs(systemID: system.id)
+        for key in stored where !keys.contains(where: { $0.id == key }) {
+            keys.append((key, key))
+        }
+        return keys.sorted { $0.id < $1.id }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if systems.isEmpty {
+                Text("Add a hub and its systems first.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            } else {
+                Picker("System", selection: $selectedSystemID) {
+                    ForEach(systems) { system in
+                        Text(system.name.isEmpty ? system.id : system.name).tag(system.id)
+                    }
+                }
+                .onAppear {
+                    if selectedSystemID.isEmpty {
+                        selectedSystemID = systems.first?.id ?? ""
+                    }
+                }
+                .onChange(of: systems) { _, newSystems in
+                    if !newSystems.contains(where: { $0.id == selectedSystemID }) {
+                        selectedSystemID = newSystems.first?.id ?? ""
+                    }
+                }
+
+                if diskKeys.isEmpty {
+                    Text("No disks reported for this system yet.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                } else {
+                    ForEach(diskKeys, id: \.id) { disk in
+                        DiskAliasRow(
+                            key: disk.id,
+                            defaultName: disk.defaultName,
+                            alias: aliasStore.alias(systemID: selectedSystem?.id ?? "", diskID: disk.id) ?? DiskAlias()
+                        ) { updated in
+                            aliasStore.setAlias(updated, systemID: selectedSystem?.id ?? "", diskID: disk.id)
+                        }
+                        .id((selectedSystem?.id ?? "") + disk.id)
+                    }
+                }
+
+                Text("Empty name uses the reported device name. Disks with the same name are merged into one row. Turn off to hide a disk.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+        }
+    }
+}
+
+private struct DiskAliasRow: View {
+    let key: String
+    let defaultName: String
+    @State var alias: DiskAlias
+    var onChange: (DiskAlias) -> Void
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Text(key)
+                .font(.system(size: 10, design: .monospaced))
+                .foregroundColor(.secondary)
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .frame(width: 96, alignment: .leading)
+                .help(key)
+
+            TextField(defaultName, text: $alias.name)
+                .textFieldStyle(.roundedBorder)
+                .onChange(of: alias) { _, newValue in
+                    onChange(newValue)
+                }
+
+            Toggle("", isOn: Binding(
+                get: { !alias.hidden },
+                set: { visible in
+                    alias.hidden = !visible
+                }
+            ))
+            .labelsHidden()
+            .help(visibleHelp)
+        }
+    }
+
+    private var visibleHelp: String {
+        alias.hidden ? "Disk is hidden — turn on to show it" : "Disk is visible — turn off to hide it"
     }
 }
 
@@ -556,7 +791,7 @@ struct AboutView: View {
                 .font(.title2)
                 .fontWeight(.bold)
 
-            Text("Version 1.0.0")
+            Text("Version \(appVersion)")
                 .font(.caption)
                 .foregroundColor(.secondary)
 
@@ -573,7 +808,7 @@ struct AboutView: View {
                     }
                 }
 
-                if let githubURL = URL(string: "https://github.com/brunooctet/BeszelBar") {
+                if let githubURL = URL(string: "https://github.com/Loriage/BeszelBar") {
                     Link(destination: githubURL) {
                         Label("GitHub", systemImage: "chevron.left.forwardslash.chevron.right")
                     }
@@ -583,12 +818,18 @@ struct AboutView: View {
 
             Spacer()
 
-            Text("© 2026 Bruno DURAND. MIT License.")
+            Text("© 2026 nichtlegacy. MIT License. Based on BeszelBar by Bruno DURAND.")
                 .font(.caption2)
                 .foregroundColor(.secondary)
                 .padding(.bottom, 16)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var appVersion: String {
+        let short = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0.0"
+        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "1"
+        return "\(short) (\(build))"
     }
 }
 

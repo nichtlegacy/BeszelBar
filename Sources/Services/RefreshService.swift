@@ -13,6 +13,16 @@ final class RefreshService {
     }
 
     private init() {
+        UserDefaults.standard.register(defaults: [
+            "refreshInterval": 30,
+            "showStatsInMenu": true,
+            "maxSystemsInMenu": 15,
+            "usageWarnPercent": 70.0,
+            "usageCriticalPercent": 90.0,
+            "tempWarnC": 60.0,
+            "tempCriticalC": 80.0
+        ])
+
         NotificationCenter.default.publisher(for: UserDefaults.didChangeNotification)
             .debounce(for: .milliseconds(500), scheduler: RunLoop.main)
             .sink { [weak self] _ in

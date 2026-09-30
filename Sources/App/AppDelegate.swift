@@ -39,6 +39,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                         _ = AppState.shared.isLoading
                         _ = AppState.shared.activeAlerts
                         _ = AppState.shared.systemDetails
+                        _ = AppState.shared.systemStats
                         _ = AppState.shared.containers
                     } onChange: {
                         continuation.resume()

@@ -5,6 +5,11 @@ import AppKit
 enum MenuBuilder {
     private static let menuWidth: CGFloat = 320
 
+    private static var maxSystemsInMenu: Int {
+        let stored = UserDefaults.standard.integer(forKey: "maxSystemsInMenu")
+        return stored > 0 ? stored : 15
+    }
+
     static func build(appState: AppState) -> NSMenu {
         let menu = NSMenu()
         menu.autoenablesItems = false
@@ -30,16 +35,16 @@ enum MenuBuilder {
         } else if appState.selectedInstanceSystems.isEmpty {
             menu.addItem(createInfoItem("No Systems Found", subtext: "Check your hub configuration"))
         } else {
-            for system in appState.selectedInstanceSystems.prefix(15) {
+            for system in appState.selectedInstanceSystems.prefix(maxSystemsInMenu) {
                 let item = createSystemItem(for: system, appState: appState)
                 menu.addItem(item)
             }
 
-            if appState.selectedInstanceSystems.count > 15 {
-                let more = NSMenuItem(title: "+\(appState.selectedInstanceSystems.count - 15) more systems", action: nil, keyEquivalent: "")
+            if appState.selectedInstanceSystems.count > maxSystemsInMenu {
+                let more = NSMenuItem(title: "+\(appState.selectedInstanceSystems.count - maxSystemsInMenu) more systems", action: nil, keyEquivalent: "")
                 more.isEnabled = false
                 more.attributedTitle = NSAttributedString(
-                    string: "+\(appState.selectedInstanceSystems.count - 15) more systems",
+                    string: "+\(appState.selectedInstanceSystems.count - maxSystemsInMenu) more systems",
                     attributes: [.foregroundColor: NSColor.secondaryLabelColor]
                 )
                 menu.addItem(more)
@@ -159,7 +164,9 @@ enum MenuBuilder {
         item.target = MenuActions.shared
         item.representedObject = system.id
 
-        let hostingView = NSHostingView(rootView: SystemMenuRowView(system: system))
+        let gpus = appState.gpus(for: system.id)
+
+        let hostingView = NSHostingView(rootView: SystemMenuRowView(system: system, gpus: gpus))
         hostingView.frame = NSRect(x: 0, y: 0, width: menuWidth, height: 44)
 
         let wrapper = NSView(frame: hostingView.frame)
@@ -183,10 +190,16 @@ enum MenuBuilder {
         let submenu = NSMenu()
 
         let details = appState.systemDetails[system.id]
+        let gpus = appState.gpus(for: system.id)
+        let disks = appState.disks(for: system.id)
+        let memory = appState.memoryInfo(for: system.id)
 
         let detailItem = NSMenuItem()
-        let detailView = NSHostingView(rootView: SystemDetailView(system: system, details: details))
-        detailView.frame = NSRect(x: 0, y: 0, width: 250, height: 180)
+        let detailView = NSHostingView(rootView: SystemDetailView(system: system, details: details, gpus: gpus, disks: disks, memory: memory))
+        // NSHostingView sizingOptions collapse with GeometryReader content, so
+        // measure explicitly and keep a sane minimum height.
+        let measuredHeight = detailView.fittingSize.height
+        detailView.frame = NSRect(x: 0, y: 0, width: 250, height: max(measuredHeight, 150))
         detailItem.view = detailView
         submenu.addItem(detailItem)
 

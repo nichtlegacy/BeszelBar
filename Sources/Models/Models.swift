@@ -36,6 +36,7 @@ struct SystemInfo: Codable, Hashable {
     let p: Bool?
     let ct: Int?
     let efs: [String: Double]?
+    let rdn: String?
     let sv: [Int]?
 }
 
@@ -75,6 +76,7 @@ extension SystemRecord {
 struct SystemStatsRecord: Identifiable, Codable {
     let id: String
     let created: String
+    let system: String?
     let stats: SystemStatsDetail?
     let type: String?
 }
@@ -83,11 +85,142 @@ struct SystemStatsDetail: Codable {
     let cpu: Double?
     let mp: Double?
     let dp: Double?
+    let m: Double?
+    let mu: Double?
     let ns: Double?
     let nr: Double?
+    let d: Double?
+    let du: Double?
+    let g: [String: GpuData]?
+    let t: [String: Double]?
+    let efs: [String: FsStats]?
+    let z: [String: ZfsPool]?
 
     enum CodingKeys: String, CodingKey {
-        case cpu, mp, dp, ns, nr
+        case cpu, mp, dp, m, mu, ns, nr, d, du, g, t, efs, z
+    }
+}
+
+struct FsStats: Codable, Hashable {
+    let d: Double?
+    let du: Double?
+}
+
+struct ZfsPool: Codable, Hashable {
+    let n: String?
+    let hu: Bool?
+    let hi: Bool?
+    let raw: Bool?
+    let d: Double?
+    let du: Double?
+    let h: String?
+}
+
+struct GpuData: Codable, Hashable {
+    let n: String?
+    let mu: Double?
+    let mt: Double?
+    let u: Double?
+    let p: Double?
+    let pp: Double?
+    let e: [String: Double]?
+}
+
+struct GpuInfo: Identifiable, Hashable {
+    let id: String
+    let name: String
+    let usage: Double
+    let temperature: Double?
+    let powerWatts: Double?
+    let memoryUsedMB: Double?
+    let memoryTotalMB: Double?
+}
+
+struct DiskInfo: Identifiable, Hashable {
+    let id: String
+    let name: String
+    let usedGB: Double
+    let totalGB: Double
+    let isRoot: Bool
+    var diskCount: Int = 1
+
+    var usedPercent: Double {
+        guard totalGB > 0 else { return 0 }
+        return usedGB / totalGB * 100
+    }
+}
+
+struct MemoryInfo: Hashable {
+    let usedGB: Double
+    let totalGB: Double
+}
+
+extension SystemStatsRecord {
+    var memory: MemoryInfo? {
+        guard let total = stats?.m, total > 0, let used = stats?.mu else { return nil }
+        return MemoryInfo(usedGB: used, totalGB: total)
+    }
+
+    var gpus: [GpuInfo] {
+        guard let map = stats?.g, !map.isEmpty else { return [] }
+        let temperatures = stats?.t ?? [:]
+        return map.keys.sorted().compactMap { key in
+            guard let data = map[key] else { return nil }
+            let name = (data.n?.isEmpty == false) ? data.n! : "GPU \(key)"
+            return GpuInfo(
+                id: key,
+                name: name,
+                usage: data.u ?? 0,
+                temperature: temperatures[name],
+                powerWatts: data.p,
+                memoryUsedMB: data.mu,
+                memoryTotalMB: data.mt
+            )
+        }
+    }
+
+    /// Local disks: root filesystem, extra filesystems and storage pools.
+    /// Only filesystems the agent was configured to monitor are reported, so
+    /// network shares never appear unless explicitly added on the agent.
+    /// Pools that merely mirror a filesystem (same used bytes) are skipped.
+    var disks: [DiskInfo] {
+        var result: [DiskInfo] = []
+
+        if let rootTotal = stats?.d, let rootUsed = stats?.du, rootTotal > 0 {
+            result.append(DiskInfo(id: "root", name: "System", usedGB: rootUsed, totalGB: rootTotal, isRoot: true))
+        }
+
+        if let extras = stats?.efs {
+            for key in extras.keys.sorted() {
+                guard let fs = extras[key], let total = fs.d, total > 0, let used = fs.du else { continue }
+                result.append(DiskInfo(id: key, name: key, usedGB: used, totalGB: total, isRoot: false))
+            }
+        }
+
+        if let pools = stats?.z {
+            for key in pools.keys.sorted() {
+                guard let pool = pools[key],
+                      pool.hu != true,
+                      pool.raw != true,
+                      let total = pool.d, total >= 4, // skip system loop images (e.g. libvirt.img)
+                      let used = pool.du else { continue }
+                let isDuplicate = result.contains { disk in
+                    abs(disk.usedGB - used) <= max(0.25, used * 0.005)
+                }
+                guard !isDuplicate else { continue }
+                result.append(DiskInfo(id: key, name: poolDisplayName(key: key, pool: pool), usedGB: used, totalGB: total, isRoot: false))
+            }
+        }
+
+        return result
+    }
+
+    private func poolDisplayName(key: String, pool: ZfsPool) -> String {
+        if let name = pool.n, !name.isEmpty {
+            return name
+        }
+        let base = key.split(separator: ":", maxSplits: 1).last.map(String.init) ?? key
+        return String(base.prefix(8))
     }
 }
 

@@ -10,6 +10,7 @@ final class AppState {
     var selectedInstance: Instance?
     var selectedInstanceSystems: [SystemRecord] = []
     var systemDetails: [String: SystemDetailsRecord] = [:]
+    var systemStats: [String: SystemStatsRecord] = [:]
     var containers: [String: [ContainerRecord]] = [:]
     var activeAlerts: [AlertRecord] = []
     var isLoading = false
@@ -21,6 +22,7 @@ final class AppState {
     private var apiServices: [UUID: BeszelAPIService] = [:]
     private var loadTask: Task<Void, Never>?
     private var detailsTask: Task<Void, Never>?
+    private var statsTask: Task<Void, Never>?
     private var alertTask: Task<Void, Never>?
     private var containerTask: Task<Void, Never>?
 
@@ -50,6 +52,7 @@ final class AppState {
                 let systems = try await service.fetchSystems()
                 guard !Task.isCancelled else { return }
                 selectedInstanceSystems = systems.sorted { $0.name < $1.name }
+                loadSystemStats()
             } catch is CancellationError {
                 return
             } catch {
@@ -80,6 +83,101 @@ final class AppState {
                 guard !Task.isCancelled else { return }
             }
         }
+    }
+
+    func loadSystemStats() {
+        guard let instance = selectedInstance else { return }
+
+        let systemIDs = selectedInstanceSystems.map(\.id)
+        guard !systemIDs.isEmpty else {
+            systemStats = [:]
+            return
+        }
+
+        statsTask?.cancel()
+        statsTask = Task {
+            do {
+                let service = getOrCreateService(for: instance)
+                let stats = try await service.fetchLatestSystemStats(for: systemIDs)
+                guard !Task.isCancelled else { return }
+                systemStats = stats
+            } catch is CancellationError {
+                return
+            } catch {
+                guard !Task.isCancelled else { return }
+            }
+        }
+    }
+
+    func gpus(for systemID: String) -> [GpuInfo] {
+        systemStats[systemID]?.gpus ?? []
+    }
+
+    func disks(for systemID: String) -> [DiskInfo] {
+        let raw = systemStats[systemID]?.disks ?? []
+        let store = DiskAliasStore.shared
+        let rootName = selectedInstanceSystems
+            .first(where: { $0.id == systemID })?.info?.rdn
+
+        // Disks sharing the same display name are merged into one group
+        // (e.g. three array disks all named "Media" become a single row).
+        var result: [DiskInfo] = []
+        var groupIndexByName: [String: Int] = [:]
+
+        for disk in raw {
+            let alias = store.alias(systemID: systemID, diskID: disk.id)
+            guard alias?.hidden != true else { continue }
+
+            var name = disk.name
+            if disk.isRoot, let rdn = rootName, !rdn.isEmpty {
+                name = rdn
+            }
+            if let custom = alias?.name, !custom.isEmpty {
+                name = custom
+            }
+
+            if let index = groupIndexByName[name] {
+                let group = result[index]
+                result[index] = DiskInfo(
+                    id: group.id,
+                    name: group.name,
+                    usedGB: group.usedGB + disk.usedGB,
+                    totalGB: group.totalGB + disk.totalGB,
+                    isRoot: group.isRoot || disk.isRoot,
+                    diskCount: group.diskCount + 1
+                )
+            } else {
+                groupIndexByName[name] = result.count
+                result.append(DiskInfo(
+                    id: name,
+                    name: name,
+                    usedGB: disk.usedGB,
+                    totalGB: disk.totalGB,
+                    isRoot: disk.isRoot
+                ))
+            }
+        }
+
+        return result
+    }
+
+    /// Raw disk keys before aliasing/grouping, for the settings editor.
+    func rawDiskEntries(for systemID: String) -> [(id: String, defaultName: String)] {
+        let raw = systemStats[systemID]?.disks ?? []
+        let rootName = selectedInstanceSystems
+            .first(where: { $0.id == systemID })?.info?.rdn
+
+        return raw.map { disk in
+            var defaultName = disk.name
+            if disk.isRoot, let rdn = rootName, !rdn.isEmpty {
+                defaultName = rdn
+            }
+            return (disk.id, defaultName)
+        }
+    }
+
+    func memoryInfo(for systemID: String) -> MemoryInfo? {
+        systemStats[systemID]?.memory
     }
 
     func loadAlerts() {
@@ -127,6 +225,9 @@ final class AppState {
         selectedInstance = instance
         selectedInstanceSystems = []
         systemDetails = [:]
+        statsTask?.cancel()
+        statsTask = nil
+        systemStats = [:]
         containers = [:]
         activeAlerts = []
         loadSystems()
@@ -160,6 +261,9 @@ final class AppState {
             selectedInstance = instances.first
             selectedInstanceSystems = []
             systemDetails = [:]
+            statsTask?.cancel()
+            statsTask = nil
+            systemStats = [:]
             containers = [:]
             activeAlerts = []
             if selectedInstance != nil {
@@ -266,6 +370,56 @@ struct Instance: Identifiable, Codable, Equatable, Hashable {
 
     static func == (lhs: Instance, rhs: Instance) -> Bool {
         lhs.id == rhs.id
+    }
+}
+
+struct DiskAlias: Codable, Equatable {
+    var name: String = ""
+    var hidden: Bool = false
+}
+
+/// Per-system disk renames and visibility, persisted to UserDefaults.
+/// Needed because the Beszel hub only reports device names as keys.
+@MainActor
+final class DiskAliasStore: ObservableObject {
+    static let shared = DiskAliasStore()
+
+    private static let storageKey = "com.nohitdev.BeszelBar.diskAliases"
+    private let defaults = UserDefaults.standard
+
+    @Published private(set) var aliases: [String: [String: DiskAlias]] = [:]
+
+    private init() {
+        if let data = defaults.data(forKey: Self.storageKey),
+           let stored = try? JSONDecoder().decode([String: [String: DiskAlias]].self, from: data) {
+            aliases = stored
+        }
+    }
+
+    func alias(systemID: String, diskID: String) -> DiskAlias? {
+        aliases[systemID]?[diskID]
+    }
+
+    /// Stored keys for a system, including disks that are currently hidden.
+    func storedDiskIDs(systemID: String) -> [String] {
+        Array(aliases[systemID]?.keys ?? [:].keys).sorted()
+    }
+
+    func setAlias(_ alias: DiskAlias?, systemID: String, diskID: String) {
+        if alias == nil || (alias?.name.isEmpty == true && alias?.hidden == false) {
+            aliases[systemID]?[diskID] = nil
+            if aliases[systemID]?.isEmpty == true {
+                aliases[systemID] = nil
+            }
+        } else {
+            aliases[systemID, default: [:]][diskID] = alias
+        }
+        persist()
+    }
+
+    private func persist() {
+        guard let data = try? JSONEncoder().encode(aliases) else { return }
+        defaults.set(data, forKey: Self.storageKey)
     }
 }
 

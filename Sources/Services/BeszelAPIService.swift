@@ -115,19 +115,7 @@ final class BeszelAPIService: @unchecked Sendable {
     }
 
     func fetchSystems() async throws -> [SystemRecord] {
-        guard let url = URL(string: "\(instance.url)/api/collections/systems/records") else {
-            throw URLError(.badURL)
-        }
-
-        var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
-        components?.queryItems = [
-            URLQueryItem(name: "perPage", value: "500")
-        ]
-
-        guard let finalURL = components?.url else { throw URLError(.badURL) }
-
-        let response: PocketBaseListResponse<SystemRecord> = try await performRequest(with: finalURL)
-        return response.items
+        try await fetchAllPages(path: "/api/collections/systems/records", filter: nil)
     }
 
     func fetchSystemDetails() async throws -> [SystemDetailsRecord] {
@@ -161,6 +149,48 @@ final class BeszelAPIService: @unchecked Sendable {
 
         let response: PocketBaseListResponse<SystemStatsRecord> = try await performRequest(with: url)
         return response.items
+    }
+
+    /// Fetches the most recent stats record per system in batched requests.
+    /// Used for per-GPU metrics (utilization, VRAM, power, temperature) which
+    /// only exist on `system_stats`, not on the live `info` blob.
+    /// PocketBase caps filter strings at 3500 chars, so large hubs are chunked.
+    func fetchLatestSystemStats(for systemIDs: [String]) async throws -> [String: SystemStatsRecord] {
+        guard !systemIDs.isEmpty else { return [:] }
+
+        var latestPerSystem: [String: SystemStatsRecord] = [:]
+        for chunk in systemIDs.chunked(into: 50) {
+            let chunkResult = try await fetchLatestSystemStatsChunk(for: chunk)
+            for (systemID, record) in chunkResult {
+                latestPerSystem[systemID] = record
+            }
+        }
+        return latestPerSystem
+    }
+
+    private func fetchLatestSystemStatsChunk(for systemIDs: [String]) async throws -> [String: SystemStatsRecord] {
+        guard var components = URLComponents(string: instance.url) else {
+            throw URLError(.badURL)
+        }
+
+        let filter = systemIDs.map { "system = '\($0)'" }.joined(separator: " || ")
+        components.path = "/api/collections/system_stats/records"
+        components.queryItems = [
+            URLQueryItem(name: "perPage", value: String(max(systemIDs.count * 4, 12))),
+            URLQueryItem(name: "sort", value: "-created"),
+            URLQueryItem(name: "filter", value: "(\(filter))")
+        ]
+
+        guard let url = components.url else { throw URLError(.badURL) }
+
+        let response: PocketBaseListResponse<SystemStatsRecord> = try await performRequest(with: url)
+
+        var latestPerSystem: [String: SystemStatsRecord] = [:]
+        for record in response.items {
+            guard let systemID = record.system, latestPerSystem[systemID] == nil else { continue }
+            latestPerSystem[systemID] = record
+        }
+        return latestPerSystem
     }
 
     func fetchAlerts(filter: String? = nil) async throws -> [AlertRecord] {
@@ -276,6 +306,15 @@ enum BeszelAPIError: LocalizedError {
         switch self {
         case .httpError(let statusCode, let url):
             return "HTTP \(statusCode) error for \(url)"
+        }
+    }
+}
+
+extension Array {
+    func chunked(into size: Int) -> [[Element]] {
+        guard size > 0 else { return [self] }
+        return stride(from: 0, to: count, by: size).map {
+            Array(self[$0..<Swift.min($0 + size, count)])
         }
     }
 }

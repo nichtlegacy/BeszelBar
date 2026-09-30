@@ -38,16 +38,6 @@ final class MenuActions: NSObject {
         }
     }
 
-    @objc func systemClicked(_ sender: NSMenuItem) {
-        Task { @MainActor in
-            guard let systemID = sender.representedObject as? String else { return }
-            if let url = AppState.shared.selectedInstance?.url {
-                NSPasteboard.general.clearContents()
-                NSPasteboard.general.setString(url, forType: .string)
-            }
-        }
-    }
-
     @objc func copyToClipboard(_ sender: NSMenuItem) {
         guard let text = sender.representedObject as? String else { return }
         NSPasteboard.general.clearContents()
