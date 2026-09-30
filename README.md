@@ -35,8 +35,11 @@ open build/Release/BeszelBar.app
 
 ## Features
 
-- **Live system cards** — See all your servers with status indicators, CPU, memory, and disk at a glance
-- **Rich system details** — Hover for detailed metrics including temperature, uptime, and usage bars
+- **Live system cards** — See all your servers with status indicators, CPU, memory, GPU, and disk at a glance
+- **GPU monitoring** — Per-GPU badges with utilization, temperature, power draw, and VRAM; switchable between utilization and VRAM view
+- **Multi-disk & pools** — Root disk, extra filesystems, and ZFS/btrfs pools with capacity and usage, merged into groups (e.g. one "Media" row for your whole array)
+- **Disk names & visibility** — Rename disks per system or hide ones you don't care about
+- **Rich system details** — Hover for CPU info, temperature, uptime, memory, and usage bars
 - **Container monitoring** — View Docker containers with health status, resource usage, and image info
 - **Alert notifications** — Active alerts displayed prominently with triggering conditions
 - **Multi-hub support** — Connect multiple Beszel instances and switch between them instantly
@@ -60,7 +63,7 @@ BeszelBar supports both password and JWT token authentication. Tokens are automa
 
 ## Acknowledgements
 
-A huge thank you to [henrygd](https://github.com/henrygd) for creating Beszel, a fantastic, lightweight, and open-source monitoring tool. This mobile client would not exist without his remarkable work.
+A huge thank you to [henrygd](https://github.com/henrygd) for creating Beszel, a fantastic, lightweight, and open-source monitoring tool. This menu bar client would not exist without his remarkable work. Based on [BeszelBar](https://github.com/brunooctet/BeszelBar) by Bruno DURAND.
 
 ## License
 

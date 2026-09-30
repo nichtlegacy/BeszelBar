@@ -11,7 +11,7 @@ if [ -z "$VERSION" ]; then
   VERSION="$(ruby -e 'puts(File.read(ARGV[0])[/bundleShortVersion":\s*"([^"]+)"/, 1])' "$PROJECT_YML")"
 fi
 
-: "${DEVELOPER_ID_APPLICATION:=Developer ID Application: Bruno DURAND (VZFD28P342)}"
+: "${DEVELOPER_ID_APPLICATION:?DEVELOPER_ID_APPLICATION required, e.g. 'Developer ID Application: Your Name (TEAMID)'}"
 
 if [ -z "${APP_STORE_CONNECT_API_KEY_P8:-}" ] || [ -z "${APP_STORE_CONNECT_KEY_ID:-}" ] || [ -z "${APP_STORE_CONNECT_ISSUER_ID:-}" ]; then
   cat >&2 <<EOF
